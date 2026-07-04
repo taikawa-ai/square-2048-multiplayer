@@ -1,0 +1,18 @@
+{
+  "name": "square-2048-multiplayer",
+  "version": "1.0.0",
+  "description": "Real-time multiplayer version of Square 2048 (room-code based, up to 6 players)",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev:server": "node --watch server.js",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix client install && npm --prefix client run build"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3"
+  }
+}

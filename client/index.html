@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Square 2048 Online</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+      <div id="hud">
+        <div id="hud-timer">05:00</div>
+      </div>
+      <div id="leaderboard"></div>
+      <button id="boost-btn">⚡ ブースト</button>
+      <div id="toast"></div>
+
+      <div id="lobby-overlay">
+        <div id="lobby-panel">
+          <h1>Square 2048 <span class="online">Online</span></h1>
+          <p class="rules">
+            矢印キー / WASD で移動（スマホは画面をドラッグ）。数字ブロックは自分の先頭の数字以下しか拾えません。同じ数字が合体して倍になり、2048でトロフィーと交換（ピッタリなら2倍）。頭同士がぶつかると大きい方が勝ち。最大6人まで同じ部屋で対戦できます。
+          </p>
+          <input id="name-input" type="text" placeholder="なまえ" maxlength="12" />
+          <div id="lobby-actions">
+            <button id="create-btn">部屋を作る</button>
+            <div class="join-row">
+              <input id="code-input" type="text" placeholder="部屋コード" maxlength="6" inputmode="numeric" />
+              <button id="join-btn">参加する</button>
+            </div>
+          </div>
+          <div id="room-info" class="hidden">
+            <p>部屋コード: <span id="room-code"></span>（このコードを共有してください）</p>
+            <ul id="player-list"></ul>
+            <button id="start-btn">スタート</button>
+          </div>
+          <p id="lobby-error"></p>
+        </div>
+      </div>
+
+      <div id="overlay" class="hidden">
+        <div id="overlay-panel">
+          <h1>タイムアップ！</h1>
+          <div id="result" class="result"></div>
+          <button id="rematch-btn">もう一度（同じ部屋）</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

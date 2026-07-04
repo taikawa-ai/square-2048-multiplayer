@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: square-2048-multiplayer
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
