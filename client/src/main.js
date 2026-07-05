@@ -26,10 +26,17 @@ const roomCodeEl = document.getElementById('room-code');
 const playerListEl = document.getElementById('player-list');
 const startBtn = document.getElementById('start-btn');
 const lobbyError = document.getElementById('lobby-error');
+const aiCountRow = document.getElementById('ai-count-row');
+const aiCountInput = document.getElementById('ai-count-input');
+const aiCountReadonly = document.getElementById('ai-count-readonly');
+const cancelRoomBtn = document.getElementById('cancel-room-btn');
+const cancelIngameBtn = document.getElementById('cancel-ingame-btn');
 
 const overlay = document.getElementById('overlay');
 const resultEl = document.getElementById('result');
 const rematchBtn = document.getElementById('rematch-btn');
+
+let isHost = false;
 
 function resize() {
   canvas.width = window.innerWidth;
@@ -93,19 +100,49 @@ rematchBtn.addEventListener('click', () => {
 });
 boostBtn.addEventListener('click', () => socket.emit('boost'));
 
+aiCountInput.addEventListener('change', () => {
+  socket.emit('setAiCount', Number(aiCountInput.value) || 0);
+});
+cancelRoomBtn.addEventListener('click', () => socket.emit('cancelRoom'));
+cancelIngameBtn.addEventListener('click', () => socket.emit('cancelRoom'));
+
 socket.on('lobby', (state) => {
   currentCode = state.code;
+  isHost = state.hostId === socket.id;
   roomInfo.classList.remove('hidden');
   roomCodeEl.textContent = state.code;
   playerListEl.innerHTML = state.players
-    .map((p) => `<li>${p.id === socket.id ? '★ ' : ''}${p.name}</li>`)
+    .map((p) => `<li>${p.id === socket.id ? '★ ' : ''}${p.name}${p.id === state.hostId ? '（ホスト）' : ''}</li>`)
     .join('');
   startBtn.disabled = state.players.length < 1;
+
+  const maxBots = Math.max(0, state.maxPlayers - state.players.length);
+  if (isHost) {
+    aiCountRow.classList.remove('hidden');
+    aiCountReadonly.classList.add('hidden');
+    aiCountInput.max = maxBots;
+    if (Number(aiCountInput.value) !== state.aiCount) aiCountInput.value = state.aiCount;
+    cancelRoomBtn.classList.remove('hidden');
+  } else {
+    aiCountRow.classList.add('hidden');
+    aiCountReadonly.classList.remove('hidden');
+    aiCountReadonly.textContent = `AI: ${state.aiCount}体（ホストが設定）`;
+    cancelRoomBtn.classList.add('hidden');
+  }
+  cancelIngameBtn.classList.toggle('hidden', !(isHost && state.running));
 });
 
 socket.on('started', () => {
   lobbyOverlay.classList.add('hidden');
   overlay.classList.add('hidden');
+  cancelIngameBtn.classList.toggle('hidden', !isHost);
+});
+
+socket.on('cancelled', () => {
+  cancelIngameBtn.classList.add('hidden');
+  overlay.classList.add('hidden');
+  lobbyOverlay.classList.remove('hidden');
+  showToast('対戦を中止しました');
 });
 
 socket.on('state', (state) => {
@@ -118,7 +155,7 @@ socket.on('gameOver', (standings) => {
   const lines = standings
     .map(
       (s, i) =>
-        `${i + 1}. ${s.id === socket.id ? '★ ' : ''}${s.name} — 🏆${s.trophies} 💀${s.eatenCount}`,
+        `${i + 1}. ${s.id === socket.id ? '★ ' : ''}${s.isBot ? '🤖 ' : ''}${s.name} — 🏆${s.trophies} 💀${s.eatenCount}`,
     )
     .join('<br />');
   resultEl.innerHTML = lines;
@@ -280,11 +317,8 @@ function render() {
     ctx.font = '12px sans-serif';
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'center';
-    ctx.fillText(
-      s.invincible ? `🛡️ ${s.name}` : s.name,
-      headPos.x,
-      headPos.y - blockHalfSize(s.headValue) - 10,
-    );
+    const label = `${s.isBot ? '🤖 ' : ''}${s.invincible ? '🛡️ ' : ''}${s.name}`;
+    ctx.fillText(label, headPos.x, headPos.y - blockHalfSize(s.headValue) - 10);
   }
 }
 
@@ -309,7 +343,7 @@ function updateHud() {
     .slice(0, 6)
     .map(
       (s) =>
-        `<li class="${s.id === socket.id ? 'me' : ''}">${s.name} 🏆${s.trophies} 💀${s.eatenCount}</li>`,
+        `<li class="${s.id === socket.id ? 'me' : ''}">${s.isBot ? '🤖 ' : ''}${s.name} 🏆${s.trophies} 💀${s.eatenCount}</li>`,
     )
     .join('')}</ol><div id="my-value">${mySum}</div>`;
 }

@@ -35,6 +35,10 @@ function getOrCreateRoom(code) {
     room = new Room(code, {
       onMessage: (snakeId, text) => io.to(roomSocketId(code, snakeId)).emit('toast', text),
       onEnd: (standings) => io.to(code).emit('gameOver', standings),
+      onCancel: () => {
+        io.to(code).emit('cancelled');
+        io.to(code).emit('lobby', lobbyState(room));
+      },
     });
     rooms.set(code, room);
   }
@@ -50,14 +54,16 @@ function lobbyState(room) {
   return {
     code: room.code,
     running: room.running,
-    players: [...room.snakes.values()].map((s) => ({ id: s.id, name: s.name })),
+    hostId: room.hostId,
+    aiCount: room.aiCount,
+    players: room.humanIds.map((id) => ({ id, name: room.snakes.get(id).name })),
     maxPlayers: MAX_PLAYERS,
   };
 }
 
 function destroyRoomIfEmpty(code) {
   const room = rooms.get(code);
-  if (room && room.playerCount === 0) {
+  if (room && room.humanCount === 0) {
     room.destroy();
     rooms.delete(code);
   }
@@ -75,7 +81,9 @@ io.on('connection', (socket) => {
     code = String(code || '').trim();
     const room = rooms.get(code);
     if (!room) return ack?.({ ok: false, error: '部屋が見つかりません' });
-    if (room.playerCount >= MAX_PLAYERS) return ack?.({ ok: false, error: '満員です（最大6人）' });
+    if (room.humanCount + room.aiCount >= MAX_PLAYERS) {
+      return ack?.({ ok: false, error: '満員です（AI枠を含めて最大6人）' });
+    }
     joinRoom(socket, room, name);
     ack?.({ ok: true, code });
   });
@@ -93,6 +101,18 @@ io.on('connection', (socket) => {
     if (!room || room.running) return;
     room.start();
     io.to(code).emit('started');
+  });
+
+  socket.on('setAiCount', (count) => {
+    const room = rooms.get(socketRoom.get(socket.id));
+    if (!room) return;
+    room.setAiCount(socket.id, count);
+    io.to(room.code).emit('lobby', lobbyState(room));
+  });
+
+  socket.on('cancelRoom', () => {
+    const room = rooms.get(socketRoom.get(socket.id));
+    room?.cancel(socket.id);
   });
 
   socket.on('input', (keys) => {

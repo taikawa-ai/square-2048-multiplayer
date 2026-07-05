@@ -86,6 +86,9 @@ const FRENZY_FLOOR_DEFS = [
 
 export const COLORS = ['#4fd3c4', '#ff6b6b', '#ffd54a', '#7c83fd', '#ff9f6b', '#69db7c'];
 
+const BOT_NAMES = ['ミク', 'ハルト', 'ソラ', 'レン', 'アオイ', 'ユナ'];
+const BOT_SEARCH_RADIUS = 500;
+
 function pickWeightedValue(frenzy) {
   const weights = frenzy ? BLOCK_WEIGHTS.concat(FRENZY_BLOCK_WEIGHTS) : BLOCK_WEIGHTS;
   const total = weights.reduce((s, b) => s + b.weight, 0);
@@ -118,15 +121,18 @@ function chainSpan(chain) {
 }
 
 class Snake {
-  constructor(id, name, color) {
+  constructor(id, name, color, isBot = false) {
     this.id = id;
     this.name = name;
     this.color = color;
+    this.isBot = isBot;
     this.trophies = 0;
     this.eatenCount = 0;
     this.keys = { up: false, down: false, left: false, right: false };
     this.pointerActive = false;
     this.pointerAngle = 0;
+    this.aiTarget = null;
+    this.aiRepathAt = 0;
     this.spawn();
   }
 
@@ -180,16 +186,19 @@ class Snake {
 }
 
 export class Room {
-  constructor(code, { onMessage, onEnd } = {}) {
+  constructor(code, { onMessage, onEnd, onCancel } = {}) {
     this.code = code;
     this.onMessage = onMessage; // (snakeId, text) => void
     this.onEnd = onEnd; // (standings) => void
-    this.snakes = new Map(); // id -> Snake
+    this.onCancel = onCancel; // () => void, fired when the host cancels the match
+    this.snakes = new Map(); // id -> Snake, humans and bots both live here
     this.blocks = [];
     this.floors = [];
     this.timeLeft = GAME_DURATION;
     this.running = false;
     this.frenzyActive = false;
+    this.hostId = null;
+    this.aiCount = 0;
     this._nextId = 1;
     this._timeouts = new Set();
   }
@@ -208,21 +217,64 @@ export class Room {
     this._timeouts.clear();
   }
 
+  get humanIds() {
+    return [...this.snakes.values()].filter((s) => !s.isBot).map((s) => s.id);
+  }
+
+  get humanCount() {
+    return this.humanIds.length;
+  }
+
   addPlayer(id, name) {
     if (this.snakes.has(id)) return this.snakes.get(id);
-    const color = COLORS[this.snakes.size % COLORS.length];
-    const snake = new Snake(id, name, color);
+    const color = COLORS[this.humanCount % COLORS.length];
+    const snake = new Snake(id, name, color, false);
     snake.alive = this.running; // joiners mid-round wait for the next tick to appear
     this.snakes.set(id, snake);
+    if (!this.hostId) this.hostId = id;
     return snake;
   }
 
   removePlayer(id) {
     this.snakes.delete(id);
+    if (this.hostId === id) {
+      const [next] = this.humanIds;
+      this.hostId = next ?? null;
+    }
   }
 
-  get playerCount() {
-    return this.snakes.size;
+  // Host-only: how many AI bots should fill the remaining seats (clamped so
+  // humans + bots never exceeds MAX_PLAYERS).
+  setAiCount(requesterId, count) {
+    if (requesterId !== this.hostId) return;
+    const maxBots = Math.max(0, MAX_PLAYERS - this.humanCount);
+    this.aiCount = Math.max(0, Math.min(maxBots, Math.floor(count)));
+  }
+
+  // Host-only: stop whatever is happening and return every human to the lobby.
+  cancel(requesterId) {
+    if (requesterId !== this.hostId) return false;
+    this.running = false;
+    this.timeLeft = GAME_DURATION;
+    this.blocks = [];
+    this.floors = [];
+    for (const t of this._timeouts) clearTimeout(t);
+    this._timeouts.clear();
+    for (const [id, s] of [...this.snakes]) if (s.isBot) this.snakes.delete(id);
+    this.onCancel?.();
+    return true;
+  }
+
+  _refreshBots() {
+    for (const [id, s] of [...this.snakes]) if (s.isBot) this.snakes.delete(id);
+    const maxBots = Math.max(0, MAX_PLAYERS - this.humanCount);
+    const count = Math.min(this.aiCount, maxBots);
+    for (let i = 0; i < count; i++) {
+      const id = `bot-${this._nextId++}`;
+      const color = COLORS[(this.humanCount + i) % COLORS.length];
+      const name = BOT_NAMES[i % BOT_NAMES.length];
+      this.snakes.set(id, new Snake(id, name, color, true));
+    }
   }
 
   setInput(id, keys) {
@@ -260,6 +312,7 @@ export class Room {
     this.frenzyActive = false;
     this.blocks = [];
     this.floors = [];
+    this._refreshBots();
     for (const s of this.snakes.values()) {
       s.trophies = 0;
       s.eatenCount = 0;
@@ -337,7 +390,8 @@ export class Room {
         if (Date.now() >= s.respawnAt) s.spawn(s.respawnSum);
         continue;
       }
-      this._steer(s);
+      if (s.isBot) this._steerBot(s, dt);
+      else this._steer(s);
       this._moveSnake(s, dt);
       this._resolveBlockObstacles(s);
     }
@@ -345,6 +399,46 @@ export class Room {
     this._resolvePickups();
     this._resolveCombat();
     this._resolveFloors();
+  }
+
+  _steerBot(s, dt) {
+    const now = Date.now();
+    if (!s.aiTarget || now >= s.aiRepathAt) {
+      s.aiTarget = this._chooseBotTarget(s);
+      s.aiRepathAt = now + randRange(600, 1200);
+    }
+    if (s.aiTarget) {
+      s.desiredAngle = Math.atan2(s.aiTarget.y - s.y, s.aiTarget.x - s.x);
+    }
+    const margin = 120;
+    if (s.x < margin) s.desiredAngle = 0;
+    else if (s.x > WORLD_W - margin) s.desiredAngle = Math.PI;
+    if (s.y < margin) s.desiredAngle = Math.PI / 2;
+    else if (s.y > WORLD_H - margin) s.desiredAngle = -Math.PI / 2;
+  }
+
+  _chooseBotTarget(s) {
+    let best = null;
+    let bestD = Infinity;
+    for (const b of this.blocks) {
+      if (b.kind === 'multiplier') continue;
+      if (b.value > s.headValue) continue;
+      const d = Math.hypot(b.x - s.x, b.y - s.y);
+      if (d < BOT_SEARCH_RADIUS && d < bestD) { bestD = d; best = { x: b.x, y: b.y }; }
+    }
+    if (best) return best;
+    for (const other of this.snakes.values()) {
+      if (other === s || !other.alive) continue;
+      const positions = other.segmentPositions();
+      for (let i = 1; i < positions.length; i++) {
+        const seg = positions[i];
+        if (seg.value >= s.headValue) continue;
+        const d = Math.hypot(seg.x - s.x, seg.y - s.y);
+        if (d < BOT_SEARCH_RADIUS && d < bestD) { bestD = d; best = { x: seg.x, y: seg.y }; }
+      }
+    }
+    if (best) return best;
+    return { x: randRange(0, WORLD_W), y: randRange(0, WORLD_H) };
   }
 
   _steer(s) {
@@ -519,7 +613,7 @@ export class Room {
   _standings() {
     return [...this.snakes.values()]
       .sort((a, b) => b.trophies - a.trophies || a.eatenCount - b.eatenCount)
-      .map((s) => ({ id: s.id, name: s.name, trophies: s.trophies, eatenCount: s.eatenCount }));
+      .map((s) => ({ id: s.id, name: s.name, isBot: s.isBot, trophies: s.trophies, eatenCount: s.eatenCount }));
   }
 
   standings() {
@@ -532,6 +626,8 @@ export class Room {
       timeLeft: this.timeLeft,
       running: this.running,
       frenzyActive: this.frenzyActive,
+      hostId: this.hostId,
+      aiCount: this.aiCount,
       blocks: this.blocks,
       floors: this.floors.map((f) => ({
         id: f.id,
@@ -546,6 +642,7 @@ export class Room {
       snakes: [...this.snakes.values()].map((s) => ({
         id: s.id,
         name: s.name,
+        isBot: s.isBot,
         color: s.color,
         alive: s.alive,
         sum: s.sum,

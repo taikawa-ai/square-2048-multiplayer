@@ -32,11 +32,19 @@
           <div id="room-info" class="hidden">
             <p>部屋コード: <span id="room-code"></span>（このコードを共有してください）</p>
             <ul id="player-list"></ul>
+            <div id="ai-count-row">
+              <label for="ai-count-input">AI人数（人間含めて最大6）</label>
+              <input id="ai-count-input" type="number" min="0" max="5" value="0" />
+            </div>
+            <p id="ai-count-readonly" class="hidden"></p>
             <button id="start-btn">スタート</button>
+            <button id="cancel-room-btn" class="hidden">この部屋を解散する</button>
           </div>
           <p id="lobby-error"></p>
         </div>
       </div>
+
+      <button id="cancel-ingame-btn" class="hidden">対戦を中止する</button>
 
       <div id="overlay" class="hidden">
         <div id="overlay-panel">

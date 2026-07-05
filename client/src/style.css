@@ -255,3 +255,61 @@ html, body {
   line-height: 1.8;
   margin-bottom: 20px;
 }
+
+#ai-count-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+#ai-count-input {
+  width: 60px;
+  font-size: 16px;
+  padding: 6px;
+  border-radius: 6px;
+  border: none;
+  text-align: center;
+}
+
+#ai-count-readonly {
+  font-size: 13px;
+  opacity: 0.8;
+  margin-bottom: 14px;
+}
+
+#ai-count-readonly.hidden,
+#cancel-room-btn.hidden,
+#cancel-ingame-btn.hidden {
+  display: none;
+}
+
+#cancel-room-btn {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #ff6b6b;
+  border: 1px solid #ff6b6b;
+  cursor: pointer;
+}
+
+#cancel-ingame-btn {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 107, 107, 0.85);
+  color: #1a1c2c;
+  cursor: pointer;
+}
