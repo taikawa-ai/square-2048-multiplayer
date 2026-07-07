@@ -16,6 +16,9 @@ html, body {
   position: relative;
   width: 100vw;
   height: 100vh;
+  /* Dynamic viewport height so the bottom (boost button) stays visible on
+     mobile Safari/Chrome where the URL bar eats into 100vh. */
+  height: 100dvh;
 }
 
 #game {
@@ -83,11 +86,34 @@ html, body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Compact HUD on phones so it doesn't swallow the small screen. */
+@media (max-width: 640px) {
+  #hud {
+    font-size: 15px;
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
+  }
+  #leaderboard {
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
+    right: 8px;
+    width: 138px;
+    padding: 7px 9px;
+    font-size: 11px;
+  }
+  #leaderboard h3 {
+    font-size: 11px;
+  }
+  #my-value {
+    font-size: 30px;
+  }
+}
+
 #boost-btn {
   position: absolute;
-  bottom: 28px;
+  /* Sit above the mobile home-indicator / browser chrome. */
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
   left: 50%;
   transform: translateX(-50%);
+  z-index: 30;
   font-size: 16px;
   font-weight: 700;
   padding: 14px 28px;
@@ -96,13 +122,24 @@ html, body {
   background: #38bdf8;
   color: #0b1220;
   cursor: pointer;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 #boost-btn:disabled {
   background: #4b5563;
   color: #cbd5e1;
   cursor: default;
+}
+
+/* Bigger, thumb-friendly boost button on phones. */
+@media (max-width: 640px) {
+  #boost-btn {
+    font-size: 18px;
+    padding: 18px 40px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  }
 }
 
 #toast {
@@ -133,6 +170,10 @@ html, body {
   align-items: center;
   justify-content: center;
   background: rgba(10, 11, 20, 0.9);
+  /* Let tall lobby content scroll on short phones instead of clipping. */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  z-index: 40;
 }
 
 #lobby-overlay.hidden,
@@ -147,6 +188,7 @@ html, body {
   text-align: center;
   color: #fff;
   padding: 24px;
+  margin: auto;
 }
 
 #lobby-panel h1,
@@ -301,9 +343,10 @@ html, body {
 
 #cancel-ingame-btn {
   position: absolute;
-  top: 12px;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
   left: 50%;
   transform: translateX(-50%);
+  z-index: 30;
   font-size: 12px;
   font-weight: 700;
   padding: 8px 16px;
@@ -312,4 +355,14 @@ html, body {
   background: rgba(255, 107, 107, 0.85);
   color: #1a1c2c;
   cursor: pointer;
+}
+
+/* Phone: stack the cancel button under the timer at top-left so it never
+   overlaps the leaderboard. Placed after the base rule so it wins on order. */
+@media (max-width: 640px) {
+  #cancel-ingame-btn {
+    left: 8px;
+    transform: none;
+    top: calc(env(safe-area-inset-top, 0px) + 34px);
+  }
 }
